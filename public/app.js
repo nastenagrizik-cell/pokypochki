@@ -2,16 +2,16 @@ const state = {
   projects: [],
   meta: { units: [] },
   currentProjectId: null,
-  panels: {
-    projects: false,
-    participants: false
-  }
+  panels: { projects: false, participants: false },
+  editingAssigneeItemId: null,
+  editingPriceItemId: null
 };
 
 const elements = {
   projectTitle: document.getElementById('project-title'),
-  progressInline: document.getElementById('progress-inline'),
-  listSubtitle: document.getElementById('list-subtitle'),
+  progressLabel: document.getElementById('progress-label'),
+  progressPercent: document.getElementById('progress-percent'),
+  progressFill: document.getElementById('progress-fill'),
   projectsPanel: document.getElementById('projects-panel'),
   participantsPanel: document.getElementById('participants-panel'),
   projectsList: document.getElementById('projects-list'),
@@ -30,6 +30,11 @@ const elements = {
   newProjectBtn: document.getElementById('new-project-btn'),
   themeToggle: document.querySelector('[data-theme-toggle]')
 };
+
+function ensureElements() {
+  const required = ['projectTitle','progressLabel','progressPercent','progressFill','projectsPanel','participantsPanel','projectsList','participantsList','itemsList','unitSelect','assignedToSelect','participantForm','participantName','itemForm','projectForm','projectModal','closeProjectModal','projectsToggle','participantsToggle','newProjectBtn','themeToggle'];
+  return required.every((key) => !!elements[key]);
+}
 
 async function request(url, options = {}) {
   const response = await fetch(url, {
@@ -60,17 +65,26 @@ function sortedItems(project) {
   });
 }
 
+function itemMeta(item) {
+  const parts = [];
+  if (item.quantity) parts.push(`${item.quantity}${item.unit ? ` ${item.unit}` : ''}`);
+  if (item.comment) parts.push(item.comment);
+  return parts.join(' · ');
+}
+
 function renderTop() {
   const project = currentProject();
   if (!project) {
     elements.projectTitle.textContent = 'Совместные покупки';
-    elements.progressInline.textContent = 'Создай первый проект';
-    elements.listSubtitle.textContent = 'Добавь проект, участников и список покупок.';
+    elements.progressLabel.textContent = 'Создай первый проект';
+    elements.progressPercent.textContent = '0%';
+    elements.progressFill.style.width = '0%';
     return;
   }
-  elements.projectTitle.textContent = project.name;
-  elements.progressInline.textContent = `${project.stats.completed} из ${project.stats.total} куплено · ${project.stats.progress}% · ${project.stats.totalSpent} ₽`;
-  elements.listSubtitle.textContent = 'Активные покупки сверху, выполненные автоматически уходят вниз.';
+  elements.projectTitle.textContent = project.name || 'Без названия';
+  elements.progressLabel.textContent = `${project.stats.completed} из ${project.stats.total} куплено · ${project.stats.totalSpent} ₽`;
+  elements.progressPercent.textContent = `${project.stats.progress}%`;
+  elements.progressFill.style.width = `${project.stats.progress}%`;
 }
 
 function renderProjects() {
@@ -87,7 +101,8 @@ function renderProjects() {
     button.addEventListener('click', () => {
       state.currentProjectId = project.id;
       state.panels.projects = false;
-      syncPanels();
+      state.editingAssigneeItemId = null;
+      state.editingPriceItemId = null;
       renderAll();
     });
     elements.projectsList.appendChild(button);
@@ -121,35 +136,53 @@ function populateSelects() {
   });
 }
 
-function assigneeView(project, item) {
+function assigneeTemplate(project, item) {
   const person = findPerson(project, item.assignedTo);
-  if (!person) {
-    return '<span class="assignee-empty">Без ответственного</span>';
+  if (state.editingAssigneeItemId === item.id) {
+    return `
+      <div class="assignee-editor">
+        <select data-action="assign-select">
+          <option value="">Без ответственного</option>
+          ${project.participants.map((entry) => `<option value="${entry.id}" ${item.assignedTo === entry.id ? 'selected' : ''}>${entry.name}</option>`).join('')}
+        </select>
+      </div>
+    `;
   }
-  return `<span class="assignee-pill" style="background:${person.color}">${person.name}</span>`;
+  if (!person) {
+    return '<button class="assignee-empty" type="button" data-action="edit-assignee">Без ответственного</button>';
+  }
+  return `<button class="assignee-pill" type="button" data-action="edit-assignee" style="background:${person.color}">${person.name}</button>`;
+}
+
+function priceTemplate(item) {
+  if (state.editingPriceItemId === item.id) {
+    return `<input class="price-input-inline" data-action="price-input" type="number" min="0" placeholder="Цена" value="${item.price ?? ''}" />`;
+  }
+  return `<button class="price-box ${item.price ? 'strong' : ''}" type="button" data-action="edit-price">${item.price ? `${item.price} ₽` : 'Цена —'}</button>`;
 }
 
 function rowTemplate(project, item) {
   const done = item.status === 'done';
+  const meta = itemMeta(item);
   return `
     <div class="item-row ${done ? 'done' : ''}" data-item-id="${item.id}">
       <button class="check-btn ${done ? 'done' : ''}" type="button" data-action="toggle-done">${done ? '✓' : ''}</button>
-      <div>
+      <div class="row-main">
         <p class="product-title">${item.title}</p>
-        <p class="product-meta">${item.quantity} ${item.unit}${item.comment ? ` · ${item.comment}` : ''}</p>
+        ${meta ? `<p class="product-meta">${meta}</p>` : ''}
       </div>
-      <div>${assigneeView(project, item)}</div>
-      <div class="price-box">${item.price ? `Потрачено: ${item.price} ₽` : 'Цена не указана'}</div>
-      <div class="inline-actions">
-        <select data-action="assign">
-          <option value="">Без ответственного</option>
-          ${project.participants.map((person) => `<option value="${person.id}" ${item.assignedTo === person.id ? 'selected' : ''}>${person.name}</option>`).join('')}
-        </select>
-        <button class="small-btn" type="button" data-action="price">Цена</button>
-        <button class="small-btn ${done ? 'undo' : ''}" type="button" data-action="undo">${done ? 'Отменить' : 'Сбросить'}</button>
+      <div class="assignee-area">${assigneeTemplate(project, item)}</div>
+      <div class="row-actions">
+        ${priceTemplate(item)}
+        <button class="delete-btn" type="button" data-action="delete">✕</button>
       </div>
     </div>
   `;
+}
+
+function resetEditors() {
+  state.editingAssigneeItemId = null;
+  state.editingPriceItemId = null;
 }
 
 function renderItems() {
@@ -165,34 +198,75 @@ function renderItems() {
     wrapper.innerHTML = rowTemplate(project, item);
     const row = wrapper.firstElementChild;
 
-    row.querySelector('[data-action="assign"]').addEventListener('change', async (event) => {
-      await updateItem(project.id, item.id, { assignedTo: event.target.value || null });
-    });
+    const assigneeButton = row.querySelector('[data-action="edit-assignee"]');
+    if (assigneeButton) {
+      assigneeButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        state.editingAssigneeItemId = item.id;
+        state.editingPriceItemId = null;
+        renderItems();
+      });
+    }
 
-    row.querySelector('[data-action="price"]').addEventListener('click', async () => {
-      const value = prompt('Сколько потратили?', item.price ?? '');
-      if (value === null) return;
-      await updateItem(project.id, item.id, { price: value || null });
-    });
+    const assigneeSelect = row.querySelector('[data-action="assign-select"]');
+    if (assigneeSelect) {
+      setTimeout(() => assigneeSelect.focus(), 0);
+      assigneeSelect.addEventListener('change', async (event) => {
+        resetEditors();
+        await updateItem(project.id, item.id, { assignedTo: event.target.value || null });
+      });
+      assigneeSelect.addEventListener('blur', () => {
+        resetEditors();
+        renderItems();
+      });
+    }
+
+    const editPriceButton = row.querySelector('[data-action="edit-price"]');
+    if (editPriceButton) {
+      editPriceButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        state.editingPriceItemId = item.id;
+        state.editingAssigneeItemId = null;
+        renderItems();
+      });
+    }
+
+    const priceInput = row.querySelector('[data-action="price-input"]');
+    if (priceInput) {
+      setTimeout(() => priceInput.focus(), 0);
+      priceInput.addEventListener('keydown', async (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          resetEditors();
+          await updateItem(project.id, item.id, { price: event.target.value || null });
+        }
+        if (event.key === 'Escape') {
+          resetEditors();
+          renderItems();
+        }
+      });
+      priceInput.addEventListener('blur', async (event) => {
+        resetEditors();
+        await updateItem(project.id, item.id, { price: event.target.value || null });
+      });
+    }
 
     row.querySelector('[data-action="toggle-done"]').addEventListener('click', async () => {
       if (item.status === 'done') {
         await updateItem(project.id, item.id, { status: item.assignedTo ? 'assigned' : 'open' });
         return;
       }
-      const value = prompt('Если покупка уже сделана, введи цену. Можно оставить пустым.', item.price ?? '');
-      if (value === null) return;
-      await updateItem(project.id, item.id, {
-        status: 'done',
-        price: value || item.price || null
-      });
+      const value = window.prompt('Укажи цену для завершенной покупки', item.price ?? '');
+      if (value === null || !String(value).trim()) {
+        return;
+      }
+      await updateItem(project.id, item.id, { status: 'done', price: String(value).trim() });
     });
 
-    row.querySelector('[data-action="undo"]').addEventListener('click', async () => {
-      await updateItem(project.id, item.id, {
-        status: item.assignedTo ? 'assigned' : 'open',
-        price: item.status === 'done' ? null : item.price
-      });
+    row.querySelector('[data-action="delete"]').addEventListener('click', async (event) => {
+      event.stopPropagation();
+      await request(`/api/projects/${project.id}/items/${item.id}`, { method: 'DELETE' });
+      await refreshProjects();
     });
 
     elements.itemsList.appendChild(row);
@@ -231,8 +305,15 @@ async function updateItem(projectId, itemId, payload) {
 }
 
 async function init() {
+  if (!ensureElements()) {
+    throw new Error('Не найдены обязательные элементы интерфейса. Обнови index.html и app.js одной версией.');
+  }
+
   state.meta = await request('/api/meta');
-  elements.unitSelect.innerHTML = state.meta.units.map((unit) => `<option value="${unit}">${unit}</option>`).join('');
+  elements.unitSelect.innerHTML = ['<option value="">Ед.</option>']
+    .concat(state.meta.units.map((unit) => `<option value="${unit}">${unit}</option>`))
+    .join('');
+
   await refreshProjects();
 
   elements.projectsToggle.addEventListener('click', () => {
@@ -289,13 +370,14 @@ async function init() {
     const project = currentProject();
     if (!project) return;
     const payload = Object.fromEntries(new FormData(elements.itemForm).entries());
+    if (!payload.quantity) payload.quantity = '';
     const updatedProject = await request(`/api/projects/${project.id}/items`, {
       method: 'POST',
       body: JSON.stringify(payload)
     });
     state.projects = state.projects.map((entry) => entry.id === updatedProject.id ? updatedProject : entry);
     elements.itemForm.reset();
-    elements.unitSelect.value = state.meta.units[0] || 'шт';
+    elements.unitSelect.value = '';
     renderAll();
   });
 
@@ -304,6 +386,13 @@ async function init() {
   elements.themeToggle.addEventListener('click', () => {
     theme = theme === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', theme);
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.assignee-area') && state.editingAssigneeItemId !== null) {
+      state.editingAssigneeItemId = null;
+      renderItems();
+    }
   });
 
   setInterval(refreshProjects, 15000);
