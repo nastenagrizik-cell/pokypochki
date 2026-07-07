@@ -2,31 +2,33 @@ const state = {
   projects: [],
   meta: { units: [] },
   currentProjectId: null,
-  participantsExpanded: false,
-  projectsExpanded: false
+  panels: {
+    projects: false,
+    participants: false
+  }
 };
 
 const elements = {
+  projectTitle: document.getElementById('project-title'),
+  progressInline: document.getElementById('progress-inline'),
+  listSubtitle: document.getElementById('list-subtitle'),
+  projectsPanel: document.getElementById('projects-panel'),
+  participantsPanel: document.getElementById('participants-panel'),
   projectsList: document.getElementById('projects-list'),
-  overview: document.getElementById('project-overview'),
   participantsList: document.getElementById('participants-list'),
   itemsList: document.getElementById('items-list'),
   unitSelect: document.getElementById('unit-select'),
-  createdBySelect: document.getElementById('created-by-select'),
   assignedToSelect: document.getElementById('assigned-to-select'),
   participantForm: document.getElementById('participant-form'),
   participantName: document.getElementById('participant-name'),
   itemForm: document.getElementById('item-form'),
   projectForm: document.getElementById('project-form'),
   projectModal: document.getElementById('project-modal'),
-  openProjectModal: document.getElementById('open-project-modal'),
   closeProjectModal: document.getElementById('close-project-modal'),
-  themeToggle: document.querySelector('[data-theme-toggle]'),
-  toggleProjects: document.getElementById('toggle-projects'),
-  toggleParticipants: document.getElementById('toggle-participants'),
-  projectsDrawer: document.getElementById('projects-drawer'),
-  participantsPanel: document.getElementById('participants-panel'),
-  currentProjectName: document.getElementById('current-project-name')
+  projectsToggle: document.getElementById('projects-toggle'),
+  participantsToggle: document.getElementById('participants-toggle'),
+  newProjectBtn: document.getElementById('new-project-btn'),
+  themeToggle: document.querySelector('[data-theme-toggle]')
 };
 
 async function request(url, options = {}) {
@@ -41,19 +43,34 @@ async function request(url, options = {}) {
   return response.json();
 }
 
-function getCurrentProject() {
+function currentProject() {
   return state.projects.find((project) => project.id === state.currentProjectId) || state.projects[0] || null;
 }
 
-function personName(project, id) {
-  return project.participants.find((person) => person.id === id)?.name || '—';
+function findPerson(project, id) {
+  return project?.participants.find((person) => person.id === id) || null;
 }
 
-function statusBadge(item) {
-  if (item.status === 'done') return '<span class="badge success">Куплено</span>';
-  if (item.status === 'assigned') return '<span class="badge">Назначено</span>';
-  if (item.status === 'cancelled') return '<span class="badge warning">Отменено</span>';
-  return '<span class="badge warning">Свободно</span>';
+function sortedItems(project) {
+  return [...project.items].sort((a, b) => {
+    const aDone = a.status === 'done' ? 1 : 0;
+    const bDone = b.status === 'done' ? 1 : 0;
+    if (aDone !== bDone) return aDone - bDone;
+    return new Date(b.updatedAt) - new Date(a.updatedAt);
+  });
+}
+
+function renderTop() {
+  const project = currentProject();
+  if (!project) {
+    elements.projectTitle.textContent = 'Совместные покупки';
+    elements.progressInline.textContent = 'Создай первый проект';
+    elements.listSubtitle.textContent = 'Добавь проект, участников и список покупок.';
+    return;
+  }
+  elements.projectTitle.textContent = project.name;
+  elements.progressInline.textContent = `${project.stats.completed} из ${project.stats.total} куплено · ${project.stats.progress}% · ${project.stats.totalSpent} ₽`;
+  elements.listSubtitle.textContent = 'Активные покупки сверху, выполненные автоматически уходят вниз.';
 }
 
 function renderProjects() {
@@ -63,137 +80,136 @@ function renderProjects() {
     return;
   }
   state.projects.forEach((project) => {
-    const card = document.createElement('div');
-    card.className = `project-card ${project.id === state.currentProjectId ? 'active' : ''}`;
-    card.innerHTML = `
-      <button type="button" data-project-id="${project.id}">
-        <strong>${project.name}</strong>
-        <p>${project.stats.completed}/${project.stats.total} · ${project.stats.totalSpent} ₽</p>
-      </button>
-    `;
-    card.querySelector('button').addEventListener('click', () => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `project-chip ${project.id === state.currentProjectId ? 'active' : ''}`;
+    button.textContent = `${project.name} · ${project.stats.completed}/${project.stats.total}`;
+    button.addEventListener('click', () => {
       state.currentProjectId = project.id;
-      state.projectsExpanded = false;
+      state.panels.projects = false;
       syncPanels();
       renderAll();
     });
-    elements.projectsList.appendChild(card);
+    elements.projectsList.appendChild(button);
   });
 }
 
-function renderOverview(project) {
-  if (!project) {
-    elements.overview.innerHTML = '<div class="empty-state">Создай первый проект.</div>';
-    elements.currentProjectName.textContent = 'Нет активного проекта';
-    return;
-  }
-  elements.currentProjectName.textContent = project.name;
-  elements.overview.innerHTML = `
-    <div>
-      <h2>${project.name}</h2>
-      <p class="muted">${project.description || 'Без описания'}</p>
-    </div>
-    <div class="project-summary-line">
-      <span class="kpi-chip">Прогресс: ${project.stats.progress}%</span>
-      <span class="kpi-chip">Покупок: ${project.stats.total}</span>
-      <span class="kpi-chip">Куплено: ${project.stats.completed}</span>
-      <span class="kpi-chip">Сумма: ${project.stats.totalSpent} ₽</span>
-    </div>
-    <div class="progress-line"><span style="width:${project.stats.progress}%"></span></div>
-  `;
-}
-
-function populateParticipantSelects(project) {
-  const options = project ? project.participants : [];
-  elements.createdBySelect.innerHTML = '<option value="">Кто добавил</option>';
-  elements.assignedToSelect.innerHTML = '<option value="">Без ответственного</option>';
-  options.forEach((person) => {
-    const a = document.createElement('option');
-    a.value = person.id;
-    a.textContent = person.name;
-    elements.createdBySelect.appendChild(a);
-    const b = document.createElement('option');
-    b.value = person.id;
-    b.textContent = person.name;
-    elements.assignedToSelect.appendChild(b);
-  });
-}
-
-function renderParticipants(project) {
+function renderParticipants() {
+  const project = currentProject();
   elements.participantsList.innerHTML = '';
   if (!project || !project.participants.length) {
-    elements.participantsList.innerHTML = '<div class="empty-state">Нет участников.</div>';
+    elements.participantsList.innerHTML = '<div class="empty-state">Участников пока нет.</div>';
     return;
   }
   project.participants.forEach((person) => {
-    const assignedCount = project.items.filter((item) => item.assignedTo === person.id).length;
-    const card = document.createElement('div');
-    card.className = 'participant-card';
-    card.innerHTML = `<strong>${person.name}</strong><div class="muted">${assignedCount} позиций</div>`;
-    elements.participantsList.appendChild(card);
+    const chip = document.createElement('div');
+    chip.className = 'participant-chip';
+    chip.innerHTML = `<span style="width:10px;height:10px;border-radius:50%;background:${person.color};display:inline-block"></span>${person.name}`;
+    elements.participantsList.appendChild(chip);
   });
-  elements.participantsList.classList.toggle('collapsed', !state.participantsExpanded);
 }
 
-function renderItems(project) {
+function populateSelects() {
+  const project = currentProject();
+  elements.assignedToSelect.innerHTML = '<option value="">Без ответственного</option>';
+  if (!project) return;
+  project.participants.forEach((person) => {
+    const option = document.createElement('option');
+    option.value = person.id;
+    option.textContent = person.name;
+    elements.assignedToSelect.appendChild(option);
+  });
+}
+
+function assigneeView(project, item) {
+  const person = findPerson(project, item.assignedTo);
+  if (!person) {
+    return '<span class="assignee-empty">Без ответственного</span>';
+  }
+  return `<span class="assignee-pill" style="background:${person.color}">${person.name}</span>`;
+}
+
+function rowTemplate(project, item) {
+  const done = item.status === 'done';
+  return `
+    <div class="item-row ${done ? 'done' : ''}" data-item-id="${item.id}">
+      <button class="check-btn ${done ? 'done' : ''}" type="button" data-action="toggle-done">${done ? '✓' : ''}</button>
+      <div>
+        <p class="product-title">${item.title}</p>
+        <p class="product-meta">${item.quantity} ${item.unit}${item.comment ? ` · ${item.comment}` : ''}</p>
+      </div>
+      <div>${assigneeView(project, item)}</div>
+      <div class="price-box">${item.price ? `Потрачено: ${item.price} ₽` : 'Цена не указана'}</div>
+      <div class="inline-actions">
+        <select data-action="assign">
+          <option value="">Без ответственного</option>
+          ${project.participants.map((person) => `<option value="${person.id}" ${item.assignedTo === person.id ? 'selected' : ''}>${person.name}</option>`).join('')}
+        </select>
+        <button class="small-btn" type="button" data-action="price">Цена</button>
+        <button class="small-btn ${done ? 'undo' : ''}" type="button" data-action="undo">${done ? 'Отменить' : 'Сбросить'}</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderItems() {
+  const project = currentProject();
   elements.itemsList.innerHTML = '';
   if (!project || !project.items.length) {
     elements.itemsList.innerHTML = '<div class="empty-state">Список покупок пока пуст.</div>';
     return;
   }
-  project.items.forEach((item) => {
-    const card = document.createElement('div');
-    card.className = 'item-card';
-    card.innerHTML = `
-      <div class="item-row">
-        <div class="item-main">
-          <p class="item-title">${item.title}</p>
-          <p class="item-meta">${item.quantity} ${item.unit}${item.comment ? ` · ${item.comment}` : ''}</p>
-        </div>
-        <div class="item-owner">${statusBadge(item)}</div>
-        <div class="item-owner">Ответственный: ${item.assignedTo ? personName(project, item.assignedTo) : '—'}</div>
-        <div class="item-actions">
-          <select data-action="assign">
-            <option value="">Назначить</option>
-            ${project.participants.map((person) => `<option value="${person.id}" ${item.assignedTo === person.id ? 'selected' : ''}>${person.name}</option>`).join('')}
-          </select>
-          <input data-action="price" type="number" min="0" placeholder="Цена" value="${item.price ?? ''}" />
-          <button class="btn btn-secondary" data-action="take-self" type="button">Себе</button>
-          <button class="btn btn-primary" data-action="done" type="button">Готово</button>
-        </div>
-      </div>
-    `;
 
-    card.querySelector('[data-action="assign"]').addEventListener('change', async (event) => {
+  sortedItems(project).forEach((item) => {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = rowTemplate(project, item);
+    const row = wrapper.firstElementChild;
+
+    row.querySelector('[data-action="assign"]').addEventListener('change', async (event) => {
       await updateItem(project.id, item.id, { assignedTo: event.target.value || null });
     });
-    card.querySelector('[data-action="price"]').addEventListener('change', async (event) => {
-      await updateItem(project.id, item.id, { price: event.target.value || null });
+
+    row.querySelector('[data-action="price"]').addEventListener('click', async () => {
+      const value = prompt('Сколько потратили?', item.price ?? '');
+      if (value === null) return;
+      await updateItem(project.id, item.id, { price: value || null });
     });
-    card.querySelector('[data-action="take-self"]').addEventListener('click', async () => {
-      const firstParticipant = project.participants[0];
-      if (!firstParticipant) return alert('Сначала добавь участника.');
-      await updateItem(project.id, item.id, { assignedTo: firstParticipant.id });
+
+    row.querySelector('[data-action="toggle-done"]').addEventListener('click', async () => {
+      if (item.status === 'done') {
+        await updateItem(project.id, item.id, { status: item.assignedTo ? 'assigned' : 'open' });
+        return;
+      }
+      const value = prompt('Если покупка уже сделана, введи цену. Можно оставить пустым.', item.price ?? '');
+      if (value === null) return;
+      await updateItem(project.id, item.id, {
+        status: 'done',
+        price: value || item.price || null
+      });
     });
-    card.querySelector('[data-action="done"]').addEventListener('click', async () => {
-      await updateItem(project.id, item.id, { status: 'done' });
+
+    row.querySelector('[data-action="undo"]').addEventListener('click', async () => {
+      await updateItem(project.id, item.id, {
+        status: item.assignedTo ? 'assigned' : 'open',
+        price: item.status === 'done' ? null : item.price
+      });
     });
-    elements.itemsList.appendChild(card);
+
+    elements.itemsList.appendChild(row);
   });
 }
 
 function syncPanels() {
-  elements.projectsDrawer.classList.toggle('hidden', !state.projectsExpanded && window.innerWidth > 980);
-  elements.participantsPanel.classList.toggle('hidden', false);
+  elements.projectsPanel.classList.toggle('hidden', !state.panels.projects);
+  elements.participantsPanel.classList.toggle('hidden', !state.panels.participants);
 }
 
 function renderAll() {
-  const project = getCurrentProject();
+  renderTop();
   renderProjects();
-  renderOverview(project);
-  populateParticipantSelects(project);
-  renderParticipants(project);
-  renderItems(project);
+  renderParticipants();
+  populateSelects();
+  renderItems();
   syncPanels();
 }
 
@@ -218,12 +234,44 @@ async function init() {
   state.meta = await request('/api/meta');
   elements.unitSelect.innerHTML = state.meta.units.map((unit) => `<option value="${unit}">${unit}</option>`).join('');
   await refreshProjects();
-  state.projectsExpanded = false;
-  syncPanels();
+
+  elements.projectsToggle.addEventListener('click', () => {
+    state.panels.projects = !state.panels.projects;
+    if (state.panels.projects) state.panels.participants = false;
+    syncPanels();
+  });
+
+  elements.participantsToggle.addEventListener('click', () => {
+    state.panels.participants = !state.panels.participants;
+    if (state.panels.participants) state.panels.projects = false;
+    syncPanels();
+  });
+
+  elements.newProjectBtn.addEventListener('click', () => {
+    elements.projectModal.showModal();
+  });
+
+  elements.closeProjectModal.addEventListener('click', () => {
+    elements.projectModal.close();
+  });
+
+  elements.projectForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const payload = Object.fromEntries(new FormData(elements.projectForm).entries());
+    const project = await request('/api/projects', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    state.projects.unshift(project);
+    state.currentProjectId = project.id;
+    elements.projectForm.reset();
+    elements.projectModal.close();
+    renderAll();
+  });
 
   elements.participantForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const project = getCurrentProject();
+    const project = currentProject();
     if (!project) return;
     const name = elements.participantName.value.trim();
     if (!name) return;
@@ -238,10 +286,9 @@ async function init() {
 
   elements.itemForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const project = getCurrentProject();
+    const project = currentProject();
     if (!project) return;
-    const formData = new FormData(elements.itemForm);
-    const payload = Object.fromEntries(formData.entries());
+    const payload = Object.fromEntries(new FormData(elements.itemForm).entries());
     const updatedProject = await request(`/api/projects/${project.id}/items`, {
       method: 'POST',
       body: JSON.stringify(payload)
@@ -249,32 +296,6 @@ async function init() {
     state.projects = state.projects.map((entry) => entry.id === updatedProject.id ? updatedProject : entry);
     elements.itemForm.reset();
     elements.unitSelect.value = state.meta.units[0] || 'шт';
-    renderAll();
-  });
-
-  elements.projectForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const formData = new FormData(elements.projectForm);
-    const payload = Object.fromEntries(formData.entries());
-    const project = await request('/api/projects', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-    state.projects.unshift(project);
-    state.currentProjectId = project.id;
-    elements.projectForm.reset();
-    elements.projectModal.close();
-    renderAll();
-  });
-
-  elements.openProjectModal.addEventListener('click', () => elements.projectModal.showModal());
-  elements.closeProjectModal.addEventListener('click', () => elements.projectModal.close());
-  elements.toggleProjects.addEventListener('click', () => {
-    state.projectsExpanded = !state.projectsExpanded;
-    syncPanels();
-  });
-  elements.toggleParticipants.addEventListener('click', () => {
-    state.participantsExpanded = !state.participantsExpanded;
     renderAll();
   });
 
