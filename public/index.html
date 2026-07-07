@@ -13,56 +13,58 @@
   <a class="skip-link" href="#main">Перейти к содержимому</a>
 
   <header class="topbar">
-    <div class="topbar-left">
+    <div class="top-actions left-actions">
       <button id="projects-toggle" class="ghost-btn" type="button">Проекты</button>
-      <button id="new-project-btn" class="ghost-btn strong" type="button">+ Проект</button>
+      <button id="new-project-btn" class="ghost-btn plus-btn" type="button">+</button>
     </div>
-    <div class="topbar-center">
+
+    <div class="top-center">
       <h1 id="project-title">Совместные покупки</h1>
-      <div id="progress-inline" class="progress-inline"></div>
+      <div class="progress-wrap">
+        <div class="progress-meta">
+          <span id="progress-label">Нет активного проекта</span>
+          <span id="progress-percent">0%</span>
+        </div>
+        <div class="progress-bar"><span id="progress-fill"></span></div>
+      </div>
     </div>
-    <div class="topbar-right">
+
+    <div class="top-actions right-actions">
       <button id="participants-toggle" class="ghost-btn" type="button">Участники</button>
       <button class="icon-btn" type="button" data-theme-toggle aria-label="Переключить тему">◐</button>
     </div>
   </header>
 
-  <div id="projects-panel" class="top-panel hidden">
-    <div class="panel-head">
-      <strong>Все проекты</strong>
-    </div>
+  <section id="projects-panel" class="top-panel hidden">
     <div id="projects-list" class="projects-list"></div>
-  </div>
+  </section>
 
-  <div id="participants-panel" class="top-panel hidden">
-    <div class="panel-head panel-head-wrap">
-      <strong>Участники проекта</strong>
-      <form id="participant-form" class="participant-form-inline">
-        <input id="participant-name" name="name" type="text" placeholder="Добавить участника" required />
-        <button class="ghost-btn strong" type="submit">Добавить</button>
-      </form>
+  <section id="participants-panel" class="top-panel hidden">
+    <div class="panel-row">
+      <div id="participants-list" class="participants-list"></div>
     </div>
-    <div id="participants-list" class="participants-list"></div>
-  </div>
+    <form id="participant-form" class="mini-form participant-mini-form">
+      <input id="participant-name" name="name" type="text" placeholder="Добавить участника" required />
+      <button class="ghost-btn mini-btn" type="submit">+</button>
+    </form>
+  </section>
 
   <main id="main" class="main-layout">
-    <section class="add-row-card">
-      <form id="item-form" class="add-item-row">
+    <section class="add-card">
+      <form id="item-form" class="mini-form add-item-form">
         <input name="title" type="text" placeholder="Что купить" required />
-        <input name="quantity" type="number" min="0" step="0.1" placeholder="Кол-во" required />
+        <input name="quantity" type="number" min="0" step="0.1" placeholder="Кол-во (необязательно)" />
         <select name="unit" id="unit-select"></select>
         <select name="assignedTo" id="assigned-to-select"></select>
         <input name="comment" type="text" placeholder="Комментарий" />
-        <button class="primary-btn" type="submit">Добавить</button>
+        <button class="ghost-btn mini-btn add-submit" type="submit">Добавить</button>
       </form>
     </section>
 
     <section class="list-card">
       <div class="list-head">
-        <div>
-          <h2>Список покупок</h2>
-          <p id="list-subtitle" class="muted">Все активные покупки сверху, завершенные — внизу.</p>
-        </div>
+        <h2>Список покупок</h2>
+        <p class="muted">Сначала активные, затем выполненные.</p>
       </div>
       <div id="items-list" class="items-list"></div>
     </section>
@@ -76,7 +78,7 @@
       </div>
       <input name="name" type="text" placeholder="Название проекта" required />
       <textarea name="description" placeholder="Короткое описание"></textarea>
-      <button class="primary-btn" type="submit">Создать</button>
+      <button class="ghost-btn create-project-btn" type="submit">Создать</button>
     </form>
   </dialog>
 
