@@ -11,76 +11,72 @@
 </head>
 <body>
   <a class="skip-link" href="#main">Перейти к содержимому</a>
+
   <header class="topbar">
-    <div>
-      <p class="eyebrow">Веб-сервис</p>
-      <h1>Совместные покупки</h1>
+    <div class="topbar-left">
+      <button id="projects-toggle" class="ghost-btn" type="button">Проекты</button>
+      <button id="new-project-btn" class="ghost-btn strong" type="button">+ Проект</button>
     </div>
-    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить тему">◐</button>
+    <div class="topbar-center">
+      <h1 id="project-title">Совместные покупки</h1>
+      <div id="progress-inline" class="progress-inline"></div>
+    </div>
+    <div class="topbar-right">
+      <button id="participants-toggle" class="ghost-btn" type="button">Участники</button>
+      <button class="icon-btn" type="button" data-theme-toggle aria-label="Переключить тему">◐</button>
+    </div>
   </header>
 
-  <main id="main" class="layout">
-    <section class="panel sidebar">
-      <div class="section-head">
-        <h2>Проекты</h2>
-        <button id="open-project-modal" class="btn btn-primary" type="button">+ Новый</button>
-      </div>
-      <div id="projects-list" class="project-list"></div>
+  <div id="projects-panel" class="top-panel hidden">
+    <div class="panel-head">
+      <strong>Все проекты</strong>
+    </div>
+    <div id="projects-list" class="projects-list"></div>
+  </div>
+
+  <div id="participants-panel" class="top-panel hidden">
+    <div class="panel-head panel-head-wrap">
+      <strong>Участники проекта</strong>
+      <form id="participant-form" class="participant-form-inline">
+        <input id="participant-name" name="name" type="text" placeholder="Добавить участника" required />
+        <button class="ghost-btn strong" type="submit">Добавить</button>
+      </form>
+    </div>
+    <div id="participants-list" class="participants-list"></div>
+  </div>
+
+  <main id="main" class="main-layout">
+    <section class="add-row-card">
+      <form id="item-form" class="add-item-row">
+        <input name="title" type="text" placeholder="Что купить" required />
+        <input name="quantity" type="number" min="0" step="0.1" placeholder="Кол-во" required />
+        <select name="unit" id="unit-select"></select>
+        <select name="assignedTo" id="assigned-to-select"></select>
+        <input name="comment" type="text" placeholder="Комментарий" />
+        <button class="primary-btn" type="submit">Добавить</button>
+      </form>
     </section>
 
-    <section class="content-area">
-      <div id="project-overview" class="panel hero-panel"></div>
-
-      <div class="grid-2">
-        <section class="panel">
-          <div class="section-head">
-            <h2>Участники</h2>
-          </div>
-          <form id="participant-form" class="inline-form">
-            <input id="participant-name" name="name" type="text" placeholder="Имя участника" required />
-            <button class="btn btn-secondary" type="submit">Добавить</button>
-          </form>
-          <div id="participants-list" class="participants-list"></div>
-        </section>
-
-        <section class="panel">
-          <div class="section-head">
-            <h2>Добавить покупку</h2>
-          </div>
-          <form id="item-form" class="item-form">
-            <input name="title" type="text" placeholder="Название" required />
-            <div class="row">
-              <input name="quantity" type="number" min="0" step="0.1" placeholder="Количество" required />
-              <select name="unit" id="unit-select"></select>
-            </div>
-            <input name="comment" type="text" placeholder="Комментарий" />
-            <div class="row">
-              <select name="createdBy" id="created-by-select"></select>
-              <select name="assignedTo" id="assigned-to-select"></select>
-            </div>
-            <button class="btn btn-primary" type="submit">Добавить позицию</button>
-          </form>
-        </section>
-      </div>
-
-      <section class="panel">
-        <div class="section-head">
+    <section class="list-card">
+      <div class="list-head">
+        <div>
           <h2>Список покупок</h2>
+          <p id="list-subtitle" class="muted">Все активные покупки сверху, завершенные — внизу.</p>
         </div>
-        <div id="items-list" class="items-list"></div>
-      </section>
+      </div>
+      <div id="items-list" class="items-list"></div>
     </section>
   </main>
 
   <dialog id="project-modal" class="modal">
     <form id="project-form" class="modal-card" method="dialog">
-      <div class="section-head">
-        <h2>Новый проект</h2>
+      <div class="panel-head">
+        <strong>Новый проект</strong>
         <button id="close-project-modal" class="icon-btn" type="button">✕</button>
       </div>
       <input name="name" type="text" placeholder="Название проекта" required />
-      <textarea name="description" placeholder="Краткое описание"></textarea>
-      <button class="btn btn-primary" type="submit">Создать проект</button>
+      <textarea name="description" placeholder="Короткое описание"></textarea>
+      <button class="primary-btn" type="submit">Создать</button>
     </form>
   </dialog>
 
