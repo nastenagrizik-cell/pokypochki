@@ -1,0 +1,12 @@
+{
+  "name": "shared-purchases-app",
+  "version": "1.0.0",
+  "description": "Совместные покупки — веб-сервис для планирования общих закупок",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

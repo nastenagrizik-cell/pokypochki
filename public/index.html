@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Совместные покупки</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Веб-сервис</p>
+      <h1>Совместные покупки</h1>
+    </div>
+    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Переключить тему">◐</button>
+  </header>
+
+  <main id="main" class="layout">
+    <section class="panel sidebar">
+      <div class="section-head">
+        <h2>Проекты</h2>
+        <button id="open-project-modal" class="btn btn-primary" type="button">+ Новый</button>
+      </div>
+      <div id="projects-list" class="project-list"></div>
+    </section>
+
+    <section class="content-area">
+      <div id="project-overview" class="panel hero-panel"></div>
+
+      <div class="grid-2">
+        <section class="panel">
+          <div class="section-head">
+            <h2>Участники</h2>
+          </div>
+          <form id="participant-form" class="inline-form">
+            <input id="participant-name" name="name" type="text" placeholder="Имя участника" required />
+            <button class="btn btn-secondary" type="submit">Добавить</button>
+          </form>
+          <div id="participants-list" class="participants-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <h2>Добавить покупку</h2>
+          </div>
+          <form id="item-form" class="item-form">
+            <input name="title" type="text" placeholder="Название" required />
+            <div class="row">
+              <input name="quantity" type="number" min="0" step="0.1" placeholder="Количество" required />
+              <select name="unit" id="unit-select"></select>
+            </div>
+            <input name="comment" type="text" placeholder="Комментарий" />
+            <div class="row">
+              <select name="createdBy" id="created-by-select"></select>
+              <select name="assignedTo" id="assigned-to-select"></select>
+            </div>
+            <button class="btn btn-primary" type="submit">Добавить позицию</button>
+          </form>
+        </section>
+      </div>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Список покупок</h2>
+        </div>
+        <div id="items-list" class="items-list"></div>
+      </section>
+    </section>
+  </main>
+
+  <dialog id="project-modal" class="modal">
+    <form id="project-form" class="modal-card" method="dialog">
+      <div class="section-head">
+        <h2>Новый проект</h2>
+        <button id="close-project-modal" class="icon-btn" type="button">✕</button>
+      </div>
+      <input name="name" type="text" placeholder="Название проекта" required />
+      <textarea name="description" placeholder="Краткое описание"></textarea>
+      <button class="btn btn-primary" type="submit">Создать проект</button>
+    </form>
+  </dialog>
+
+  <script src="./app.js" defer></script>
+</body>
+</html>
