@@ -1,7 +1,9 @@
 const state = {
   projects: [],
   meta: { units: [] },
-  currentProjectId: null
+  currentProjectId: null,
+  participantsExpanded: false,
+  projectsExpanded: false
 };
 
 const elements = {
@@ -19,7 +21,12 @@ const elements = {
   projectModal: document.getElementById('project-modal'),
   openProjectModal: document.getElementById('open-project-modal'),
   closeProjectModal: document.getElementById('close-project-modal'),
-  themeToggle: document.querySelector('[data-theme-toggle]')
+  themeToggle: document.querySelector('[data-theme-toggle]'),
+  toggleProjects: document.getElementById('toggle-projects'),
+  toggleParticipants: document.getElementById('toggle-participants'),
+  projectsDrawer: document.getElementById('projects-drawer'),
+  participantsPanel: document.getElementById('participants-panel'),
+  currentProjectName: document.getElementById('current-project-name')
 };
 
 async function request(url, options = {}) {
@@ -38,20 +45,36 @@ function getCurrentProject() {
   return state.projects.find((project) => project.id === state.currentProjectId) || state.projects[0] || null;
 }
 
+function personName(project, id) {
+  return project.participants.find((person) => person.id === id)?.name || '—';
+}
+
+function statusBadge(item) {
+  if (item.status === 'done') return '<span class="badge success">Куплено</span>';
+  if (item.status === 'assigned') return '<span class="badge">Назначено</span>';
+  if (item.status === 'cancelled') return '<span class="badge warning">Отменено</span>';
+  return '<span class="badge warning">Свободно</span>';
+}
+
 function renderProjects() {
   elements.projectsList.innerHTML = '';
+  if (!state.projects.length) {
+    elements.projectsList.innerHTML = '<div class="empty-state">Пока нет проектов.</div>';
+    return;
+  }
   state.projects.forEach((project) => {
     const card = document.createElement('div');
     card.className = `project-card ${project.id === state.currentProjectId ? 'active' : ''}`;
     card.innerHTML = `
       <button type="button" data-project-id="${project.id}">
         <strong>${project.name}</strong>
-        <p class="muted">${project.description || 'Без описания'}</p>
-        <p class="muted">${project.stats.completed}/${project.stats.total} куплено · ${project.stats.totalSpent} ₽</p>
+        <p>${project.stats.completed}/${project.stats.total} · ${project.stats.totalSpent} ₽</p>
       </button>
     `;
     card.querySelector('button').addEventListener('click', () => {
       state.currentProjectId = project.id;
+      state.projectsExpanded = false;
+      syncPanels();
       renderAll();
     });
     elements.projectsList.appendChild(card);
@@ -60,140 +83,108 @@ function renderProjects() {
 
 function renderOverview(project) {
   if (!project) {
-    elements.overview.innerHTML = '<div class="empty-state">Сначала создайте проект.</div>';
+    elements.overview.innerHTML = '<div class="empty-state">Создай первый проект.</div>';
+    elements.currentProjectName.textContent = 'Нет активного проекта';
     return;
   }
-
+  elements.currentProjectName.textContent = project.name;
   elements.overview.innerHTML = `
     <div>
-      <p class="eyebrow">Текущий проект</p>
       <h2>${project.name}</h2>
-      <p class="muted">${project.description || 'Добавьте описание проекта, чтобы участникам было понятнее.'}</p>
+      <p class="muted">${project.description || 'Без описания'}</p>
+    </div>
+    <div class="project-summary-line">
+      <span class="kpi-chip">Прогресс: ${project.stats.progress}%</span>
+      <span class="kpi-chip">Покупок: ${project.stats.total}</span>
+      <span class="kpi-chip">Куплено: ${project.stats.completed}</span>
+      <span class="kpi-chip">Сумма: ${project.stats.totalSpent} ₽</span>
     </div>
     <div class="progress-line"><span style="width:${project.stats.progress}%"></span></div>
-    <div class="stats-grid">
-      <div class="stat-card"><p class="muted">Прогресс</p><h3>${project.stats.progress}%</h3></div>
-      <div class="stat-card"><p class="muted">Всего позиций</p><h3>${project.stats.total}</h3></div>
-      <div class="stat-card"><p class="muted">Куплено</p><h3>${project.stats.completed}</h3></div>
-      <div class="stat-card"><p class="muted">Сумма</p><h3>${project.stats.totalSpent} ₽</h3></div>
-    </div>
   `;
 }
 
 function populateParticipantSelects(project) {
   const options = project ? project.participants : [];
-  elements.createdBySelect.innerHTML = '<option value="">Кто добавляет</option>';
-  elements.assignedToSelect.innerHTML = '<option value="">Не назначено</option>';
-
+  elements.createdBySelect.innerHTML = '<option value="">Кто добавил</option>';
+  elements.assignedToSelect.innerHTML = '<option value="">Без ответственного</option>';
   options.forEach((person) => {
-    const optionA = document.createElement('option');
-    optionA.value = person.id;
-    optionA.textContent = person.name;
-    elements.createdBySelect.appendChild(optionA);
-
-    const optionB = document.createElement('option');
-    optionB.value = person.id;
-    optionB.textContent = person.name;
-    elements.assignedToSelect.appendChild(optionB);
+    const a = document.createElement('option');
+    a.value = person.id;
+    a.textContent = person.name;
+    elements.createdBySelect.appendChild(a);
+    const b = document.createElement('option');
+    b.value = person.id;
+    b.textContent = person.name;
+    elements.assignedToSelect.appendChild(b);
   });
 }
 
 function renderParticipants(project) {
   elements.participantsList.innerHTML = '';
   if (!project || !project.participants.length) {
-    elements.participantsList.innerHTML = '<div class="empty-state">Добавьте первого участника.</div>';
+    elements.participantsList.innerHTML = '<div class="empty-state">Нет участников.</div>';
     return;
   }
-
   project.participants.forEach((person) => {
     const assignedCount = project.items.filter((item) => item.assignedTo === person.id).length;
-    const doneCount = project.items.filter((item) => item.assignedTo === person.id && item.status === 'done').length;
     const card = document.createElement('div');
     card.className = 'participant-card';
-    card.innerHTML = `
-      <div class="item-card-top">
-        <strong><span class="avatar" style="background:${person.color}"></span> ${person.name}</strong>
-        <span class="badge">${assignedCount} поз.</span>
-      </div>
-      <p class="muted">Куплено: ${doneCount}</p>
-    `;
+    card.innerHTML = `<strong>${person.name}</strong><div class="muted">${assignedCount} позиций</div>`;
     elements.participantsList.appendChild(card);
   });
-}
-
-function statusBadge(item) {
-  if (item.status === 'done') return '<span class="badge success">Куплено</span>';
-  if (item.status === 'assigned') return '<span class="badge">Назначено</span>';
-  if (item.status === 'cancelled') return '<span class="badge warning">Отменено</span>';
-  return '<span class="badge warning">Не назначено</span>';
-}
-
-function personName(project, id) {
-  return project.participants.find((person) => person.id === id)?.name || '—';
+  elements.participantsList.classList.toggle('collapsed', !state.participantsExpanded);
 }
 
 function renderItems(project) {
   elements.itemsList.innerHTML = '';
   if (!project || !project.items.length) {
-    elements.itemsList.innerHTML = '<div class="empty-state">Пока нет ни одной покупки.</div>';
+    elements.itemsList.innerHTML = '<div class="empty-state">Список покупок пока пуст.</div>';
     return;
   }
-
   project.items.forEach((item) => {
     const card = document.createElement('div');
     card.className = 'item-card';
     card.innerHTML = `
-      <div class="item-card-top">
-        <div>
-          <strong>${item.title}</strong>
-          <p class="muted">${item.quantity} ${item.unit}${item.comment ? ` · ${item.comment}` : ''}</p>
+      <div class="item-row">
+        <div class="item-main">
+          <p class="item-title">${item.title}</p>
+          <p class="item-meta">${item.quantity} ${item.unit}${item.comment ? ` · ${item.comment}` : ''}</p>
         </div>
-        ${statusBadge(item)}
-      </div>
-      <div class="item-card-meta">
-        <span class="muted">Добавил: ${personName(project, item.createdBy)}</span>
-        <span class="muted">Ответственный: ${item.assignedTo ? personName(project, item.assignedTo) : 'не назначен'}</span>
-        <span class="muted">Цена: ${item.price ? `${item.price} ₽` : 'не указана'}</span>
-      </div>
-      <div class="item-card-actions">
-        <select data-action="assign">
-          <option value="">Назначить участника</option>
-          ${project.participants.map((person) => `<option value="${person.id}" ${item.assignedTo === person.id ? 'selected' : ''}>${person.name}</option>`).join('')}
-        </select>
-        <input data-action="price" type="number" min="0" placeholder="Цена" value="${item.price ?? ''}" />
-        <button class="btn btn-secondary" data-action="take-self" type="button">Взять себе</button>
-        <button class="btn btn-primary" data-action="done" type="button">Отметить купленным</button>
+        <div class="item-owner">${statusBadge(item)}</div>
+        <div class="item-owner">Ответственный: ${item.assignedTo ? personName(project, item.assignedTo) : '—'}</div>
+        <div class="item-actions">
+          <select data-action="assign">
+            <option value="">Назначить</option>
+            ${project.participants.map((person) => `<option value="${person.id}" ${item.assignedTo === person.id ? 'selected' : ''}>${person.name}</option>`).join('')}
+          </select>
+          <input data-action="price" type="number" min="0" placeholder="Цена" value="${item.price ?? ''}" />
+          <button class="btn btn-secondary" data-action="take-self" type="button">Себе</button>
+          <button class="btn btn-primary" data-action="done" type="button">Готово</button>
+        </div>
       </div>
     `;
 
-    const assignSelect = card.querySelector('[data-action="assign"]');
-    const priceInput = card.querySelector('[data-action="price"]');
-    const takeSelfBtn = card.querySelector('[data-action="take-self"]');
-    const doneBtn = card.querySelector('[data-action="done"]');
-
-    assignSelect.addEventListener('change', async (event) => {
+    card.querySelector('[data-action="assign"]').addEventListener('change', async (event) => {
       await updateItem(project.id, item.id, { assignedTo: event.target.value || null });
     });
-
-    priceInput.addEventListener('change', async (event) => {
+    card.querySelector('[data-action="price"]').addEventListener('change', async (event) => {
       await updateItem(project.id, item.id, { price: event.target.value || null });
     });
-
-    takeSelfBtn.addEventListener('click', async () => {
+    card.querySelector('[data-action="take-self"]').addEventListener('click', async () => {
       const firstParticipant = project.participants[0];
-      if (!firstParticipant) {
-        alert('Сначала добавьте участника.');
-        return;
-      }
+      if (!firstParticipant) return alert('Сначала добавь участника.');
       await updateItem(project.id, item.id, { assignedTo: firstParticipant.id });
     });
-
-    doneBtn.addEventListener('click', async () => {
+    card.querySelector('[data-action="done"]').addEventListener('click', async () => {
       await updateItem(project.id, item.id, { status: 'done' });
     });
-
     elements.itemsList.appendChild(card);
   });
+}
+
+function syncPanels() {
+  elements.projectsDrawer.classList.toggle('hidden', !state.projectsExpanded && window.innerWidth > 980);
+  elements.participantsPanel.classList.toggle('hidden', false);
 }
 
 function renderAll() {
@@ -203,6 +194,7 @@ function renderAll() {
   populateParticipantSelects(project);
   renderParticipants(project);
   renderItems(project);
+  syncPanels();
 }
 
 async function refreshProjects() {
@@ -226,6 +218,8 @@ async function init() {
   state.meta = await request('/api/meta');
   elements.unitSelect.innerHTML = state.meta.units.map((unit) => `<option value="${unit}">${unit}</option>`).join('');
   await refreshProjects();
+  state.projectsExpanded = false;
+  syncPanels();
 
   elements.participantForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -275,6 +269,14 @@ async function init() {
 
   elements.openProjectModal.addEventListener('click', () => elements.projectModal.showModal());
   elements.closeProjectModal.addEventListener('click', () => elements.projectModal.close());
+  elements.toggleProjects.addEventListener('click', () => {
+    state.projectsExpanded = !state.projectsExpanded;
+    syncPanels();
+  });
+  elements.toggleParticipants.addEventListener('click', () => {
+    state.participantsExpanded = !state.participantsExpanded;
+    renderAll();
+  });
 
   let theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   document.documentElement.setAttribute('data-theme', theme);
